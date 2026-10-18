@@ -360,3 +360,20 @@ def test_run_balances_after_twitter_reanalysis(tmp_path, monkeypatch) -> None:
     asyncio.run(orchestrator.run())
 
     assert enriched_ids == ["second"]
+
+def test_topic_dedup_ignores_malformed_indices(monkeypatch) -> None:
+    import json
+
+    orchestrator = make_orchestrator(DigestConfig())
+    orchestrator.config.ai = SimpleNamespace()
+
+    class FakeAIClient:
+        async def complete(self, **kwargs):
+            return json.dumps({"duplicates": [[True, 1], ["0", 1], [0, True], [0, 1]]})
+
+    monkeypatch.setattr("src.orchestrator.create_ai_client", lambda _config: FakeAIClient())
+    items = [make_item("primary", 9.0, "ai"), make_item("duplicate", 8.0, "ai")]
+
+    result = asyncio.run(orchestrator.merge_topic_duplicates(items, log=False))
+
+    assert [item.id for item in result] == ["primary"]

@@ -137,9 +137,15 @@ class StorageManager:
 
         try:
             with open(subscribers_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                subscribers = json.load(f)
         except json.JSONDecodeError:
             return []
+
+        if not isinstance(subscribers, list) or any(
+            not isinstance(subscriber, str) for subscriber in subscribers
+        ):
+            return []
+        return subscribers
 
     def add_subscriber(self, email_addr: str):
         """Adds a new subscriber email."""

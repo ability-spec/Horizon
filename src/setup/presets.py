@@ -39,8 +39,25 @@ def fetch_presets() -> Optional[Dict]:
         response.raise_for_status()
         data = response.json()
 
-        if "categories" not in data:
+        if not isinstance(data, dict):
             return None
+        categories = data.get("categories")
+        if not isinstance(categories, list):
+            return None
+        for category in categories:
+            if not isinstance(category, dict):
+                return None
+            sources = category.get("sources", [])
+            keywords = category.get("keywords", [])
+            if not isinstance(sources, list) or not isinstance(keywords, list):
+                return None
+            if any(
+                not isinstance(source, dict)
+                or not isinstance(source.get("config", {}), dict)
+                or not isinstance(source.get("tags", []), list)
+                for source in sources
+            ):
+                return None
 
         return _transform_api_response(data)
     except (httpx.HTTPError, json.JSONDecodeError, ValueError):

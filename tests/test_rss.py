@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+
+import pytest
 from unittest.mock import AsyncMock
 from unittest.mock import MagicMock
 
@@ -20,6 +22,14 @@ _FEED = """<?xml version="1.0" encoding="UTF-8" ?>
 </channel></rss>
 """
 _SINCE = datetime(2026, 4, 24, 0, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture(autouse=True)
+def _mock_public_dns(monkeypatch) -> None:
+    async def resolve(hostname: str, port: int) -> set[str]:
+        return {"93.184.216.34"}
+
+    monkeypatch.setattr("src.url_security._resolve_hostname", resolve)
 
 
 def _make_feed_client(feed_text: str) -> AsyncMock:
@@ -107,3 +117,33 @@ def test_unknown_extractor_name_ignored() -> None:
 
     assert len(items) == 1
     assert items[0].content == "Short summary from feed."
+
+def test_rss_uses_safe_request_for_feed() -> None:
+    client = _make_feed_client(_FEED)
+    source = RSSSourceConfig(name="Test", url="https://example.com/feed.xml")
+    scraper = RSSScraper([source], client)
+
+    items = asyncio.run(scraper.fetch(_SINCE))
+
+    assert len(items) == 1
+    assert client.get.await_args.kwargs["follow_redirects"] is False
+
+
+def test_rss_skips_invalid_entry_and_keeps_later_valid_entry() -> None:
+    feed_text = (
+        '<?xml version="1.0" encoding="UTF-8" ?>'
+        '<rss version="2.0"><channel><title>Test</title>'
+        '<item><guid>bad</guid><title>Bad URL</title>'
+        '<link>javascript:alert(1)</link>'
+        '<pubDate>Fri, 24 Apr 2026 12:00:00 GMT</pubDate></item>'
+        '<item><guid>good</guid><title>Good item</title>'
+        '<link>https://example.com/good</link>'
+        '<pubDate>Fri, 24 Apr 2026 12:01:00 GMT</pubDate></item>'
+        '</channel></rss>'
+    )
+    client = _make_feed_client(feed_text)
+    source = RSSSourceConfig(name="Test", url="https://example.com/feed.xml")
+
+    items = asyncio.run(RSSScraper([source], client).fetch(_SINCE))
+
+    assert [item.title for item in items] == ["Good item"]

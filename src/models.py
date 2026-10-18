@@ -193,10 +193,10 @@ class AIConfig(BaseModel):
     base_url: Optional[str] = None
     api_key_env: str
     temperature: float = 0.3
-    max_tokens: int = 4096
-    throttle_sec: float = 0.0
-    analysis_concurrency: int = 1
-    enrichment_concurrency: int = 1
+    max_tokens: int = Field(default=4096, gt=0)
+    throttle_sec: float = Field(default=0.0, ge=0)
+    analysis_concurrency: int = Field(default=1, gt=0)
+    enrichment_concurrency: int = Field(default=1, gt=0)
     languages: List[str] = Field(default_factory=lambda: ["en"])
     # Azure OpenAI specific; required when provider == AZURE
     azure_endpoint_env: Optional[str] = None
@@ -229,7 +229,7 @@ class HackerNewsConfig(BaseModel):
     """Hacker News configuration."""
 
     enabled: bool = True
-    fetch_top_stories: int = 30
+    fetch_top_stories: int = Field(default=30, gt=0)
     min_score: int = 100
     category: Optional[str] = None
     profile: ProfileRoute = None
@@ -271,7 +271,7 @@ class RedditSubredditConfig(BaseModel):
     time_filter: str = (
         "day"  # hour, day, week, month, year, all (only for top/controversial)
     )
-    fetch_limit: int = 25
+    fetch_limit: int = Field(default=25, gt=0)
     min_score: int = 10
     category: Optional[str] = None
     profile: ProfileRoute = None
@@ -283,7 +283,7 @@ class RedditUserConfig(BaseModel):
     username: str  # without u/ prefix
     enabled: bool = True
     sort: str = "new"
-    fetch_limit: int = 10
+    fetch_limit: int = Field(default=10, gt=0)
     category: Optional[str] = None
     profile: ProfileRoute = None
 
@@ -294,7 +294,7 @@ class RedditConfig(BaseModel):
     enabled: bool = True
     subreddits: List[RedditSubredditConfig] = Field(default_factory=list)
     users: List[RedditUserConfig] = Field(default_factory=list)
-    fetch_comments: int = 5  # top comments per post, 0 to disable
+    fetch_comments: int = Field(default=5, ge=0)  # top comments per post, 0 to disable
 
 
 class TelegramChannelConfig(BaseModel):
@@ -302,7 +302,7 @@ class TelegramChannelConfig(BaseModel):
 
     channel: str  # channel username, e.g. "zaihuapd"
     enabled: bool = True
-    fetch_limit: int = 20
+    fetch_limit: int = Field(default=20, gt=0)
     category: Optional[str] = None
     profile: ProfileRoute = None
 
@@ -328,13 +328,13 @@ class TwitterConfig(BaseModel):
     mode: str = "apify"  # "apify" or "playwright"
     users: List[str] = Field(default_factory=list)
     keywords: List[str] = Field(default_factory=list)
-    fetch_limit: int = 10
+    fetch_limit: int = Field(default=10, gt=0)
     category: Optional[str] = None
     profile: ProfileRoute = None
     fetch_reply_text: bool = False
-    max_replies_per_tweet: int = 3
-    max_tweets_to_expand: int = 10
-    reply_min_likes: int = 0
+    max_replies_per_tweet: int = Field(default=3, ge=0)
+    max_tweets_to_expand: int = Field(default=10, ge=0)
+    reply_min_likes: int = Field(default=0, ge=0)
     # Apify settings (used when mode == "apify")
     apify_token_env: str = "APIFY_TOKEN"
     actor_id: str = "altimis~scweet"
@@ -354,7 +354,7 @@ class OpenBBWatchlist(BaseModel):
     symbols: List[str] = Field(default_factory=list)
     enabled: bool = True
     provider: str = "yfinance"
-    fetch_limit: int = 20
+    fetch_limit: int = Field(default=20, gt=0)
     category: Optional[str] = None
     profile: ProfileRoute = None
 
@@ -394,8 +394,8 @@ class OSSInsightConfig(BaseModel):
         default_factory=lambda: ["All", "Python", "TypeScript"]
     )
     keywords: List[str] = Field(default_factory=list)
-    min_stars: int = 5
-    max_items: int = 30
+    min_stars: int = Field(default=5, ge=0)
+    max_items: int = Field(default=30, gt=0)
     category: Optional[str] = None
     profile: ProfileRoute = None
 
@@ -413,7 +413,7 @@ class GDELTConfig(BaseModel):
     enabled: bool = False
     query: str = "artificial intelligence"
     mode: str = "ArtList"
-    max_records: int = 75  # GDELT DOC API caps at 250; keep modest
+    max_records: int = Field(default=75, gt=0, le=250)  # GDELT DOC API caps at 250; keep modest
     timespan: Optional[str] = None  # e.g. "24h"; overrides since-derived window
     language: Optional[str] = None  # sourcelang filter, e.g. "english"; None = no filter
     country: Optional[str] = None  # sourcecountry filter; None = no filter
@@ -434,7 +434,7 @@ class GoogleNewsConfig(BaseModel):
     language: str = "en"  # hl
     country: str = "US"  # gl
     ceid: Optional[str] = None  # when None scraper derives it as "{country}:{language}"
-    max_results: int = 100  # cap ~100
+    max_results: int = Field(default=100, gt=0)  # cap ~100
     category: Optional[str] = None
     profile: ProfileRoute = None
 
@@ -586,7 +586,7 @@ class CollectionConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    time_window_hours: int = 24
+    time_window_hours: int = Field(default=24, gt=0)
 
 
 class DigestConfig(BaseModel):

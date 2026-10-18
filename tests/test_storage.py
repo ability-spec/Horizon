@@ -230,3 +230,10 @@ def test_save_subscribers_replace_failure_preserves_destination(tmp_path, monkey
 
     assert subscribers_path.read_text(encoding="utf-8") == '["old"]'
     assert list(tmp_path.glob(f".{subscribers_path.name}.*.tmp")) == []
+
+@pytest.mark.parametrize("payload", ["{}", "null", '["ok@example.com", 123]'])
+def test_load_subscribers_rejects_non_string_list_payloads(tmp_path, payload):
+    storage = StorageManager(data_dir=str(tmp_path))
+    (tmp_path / "subscribers.json").write_text(payload, encoding="utf-8")
+
+    assert storage.load_subscribers() == []

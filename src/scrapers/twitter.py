@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from html import unescape
 from typing import List, Optional
@@ -18,6 +19,10 @@ logger = logging.getLogger(__name__)
 _APIFY_BASE = "https://api.apify.com/v2"
 _POLL_INTERVAL = 3.0
 _MAX_WAIT = 180
+
+
+def _apify_headers(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
 
 
 class TwitterScraper(BaseScraper):
@@ -81,6 +86,7 @@ class TwitterScraper(BaseScraper):
             except Exception as exc:
                 logger.error(f"Keyword search failed for {keyword!r}: {exc}")
 
+        items = items[: self.config.fetch_limit]
         logger.info(f"Fetched {len(items)} tweets via Apify.")
         return items
 
@@ -109,9 +115,11 @@ class TwitterScraper(BaseScraper):
     async def _start_run_with_payload(
         self, token: str, payload: dict
     ) -> tuple[Optional[str], Optional[str]]:
-        url = f"{_APIFY_BASE}/acts/{self.config.actor_id}/runs?token={token}"
+        url = f"{_APIFY_BASE}/acts/{self.config.actor_id}/runs"
         try:
-            resp = await self.client.post(url, json=payload, timeout=30.0)
+            resp = await self.client.post(
+                url, json=payload, headers=_apify_headers(token), timeout=30.0
+            )
             resp.raise_for_status()
             data = resp.json()["data"]
             run_id = data["id"]
@@ -136,11 +144,15 @@ class TwitterScraper(BaseScraper):
         )
 
     async def _wait_for_run(self, token: str, run_id: str) -> bool:
-        url = f"{_APIFY_BASE}/actor-runs/{run_id}?token={token}"
-        elapsed = 0.0
-        while elapsed < _MAX_WAIT:
+        url = f"{_APIFY_BASE}/actor-runs/{run_id}"
+        headers = _apify_headers(token)
+        deadline = time.monotonic() + _MAX_WAIT
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
             try:
-                resp = await self.client.get(url, timeout=10.0)
+                resp = await self.client.get(url, headers=headers, timeout=min(10.0, remaining))
                 resp.raise_for_status()
                 status = resp.json()["data"]["status"]
                 if status == "SUCCEEDED":
@@ -150,15 +162,19 @@ class TwitterScraper(BaseScraper):
                     return False
             except Exception as exc:
                 logger.warning(f"Error polling Apify run {run_id}: {exc}")
-            await asyncio.sleep(_POLL_INTERVAL)
-            elapsed += _POLL_INTERVAL
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            await asyncio.sleep(min(_POLL_INTERVAL, remaining))
         logger.warning(f"Apify run {run_id} timed out after {_MAX_WAIT}s.")
         return False
 
     async def _fetch_dataset(self, token: str, dataset_id: str) -> list:
-        url = f"{_APIFY_BASE}/datasets/{dataset_id}/items?token={token}"
+        url = f"{_APIFY_BASE}/datasets/{dataset_id}/items"
         try:
-            resp = await self.client.get(url, timeout=30.0)
+            resp = await self.client.get(
+                url, headers=_apify_headers(token), timeout=30.0
+            )
             resp.raise_for_status()
             return resp.json()
         except Exception as exc:

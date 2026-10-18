@@ -251,7 +251,11 @@ class HorizonPipelineService:
         missing_env: list[str] = []
 
         if check_env:
-            required = [ctx.config.ai.api_key_env]
+            required = (
+                [ctx.config.ai.api_key_env]
+                if ctx.config.ai.provider.value != "ollama" and ctx.config.ai.api_key_env
+                else []
+            )
             for key in required:
                 if not os.getenv(key):
                     missing_env.append(key)

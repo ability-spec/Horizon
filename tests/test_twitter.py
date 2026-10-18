@@ -631,4 +631,60 @@ def test_fetch_replies_no_conversation_id_returns_empty(monkeypatch):
     asyncio.run(client.aclose())
     assert result == []
 
+def test_apify_token_is_sent_in_header_not_url(monkeypatch):
+    monkeypatch.setenv("APIFY_TOKEN", "test_token")
+    requests = []
 
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "POST" and "/runs" in request.url.path:
+            return httpx.Response(200, json=_run_resp())
+        if "/actor-runs/" in request.url.path:
+            return httpx.Response(200, json=_status_resp())
+        if "/datasets/" in request.url.path:
+            return httpx.Response(200, json=[])
+        raise AssertionError(f"Unexpected: {request.url}")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    try:
+        asyncio.run(
+            TwitterScraper(_make_config(), client).fetch(
+                datetime.now(timezone.utc) - timedelta(hours=1)
+            )
+        )
+    finally:
+        asyncio.run(client.aclose())
+
+    assert len(requests) == 3
+    assert all(
+        request.headers.get("Authorization") == "Bearer test_token"
+        for request in requests
+    )
+    assert all("test_token" not in str(request.url) for request in requests)
+    assert all("token" not in request.url.params for request in requests)
+
+
+def test_twitter_fetch_limit_caps_combined_results(monkeypatch):
+    monkeypatch.setenv("APIFY_TOKEN", "test_token")
+    tweets = [_tweet(str(index)) for index in range(1, 6)]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and "/runs" in request.url.path:
+            return httpx.Response(200, json=_run_resp())
+        if "/actor-runs/" in request.url.path:
+            return httpx.Response(200, json=_status_resp())
+        if "/datasets/" in request.url.path:
+            return httpx.Response(200, json=tweets)
+        raise AssertionError(f"Unexpected: {request.url}")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    try:
+        items = asyncio.run(
+            TwitterScraper(_make_config(fetch_limit=3), client).fetch(
+                datetime.now(timezone.utc) - timedelta(hours=1)
+            )
+        )
+    finally:
+        asyncio.run(client.aclose())
+
+    assert len(items) == 3
